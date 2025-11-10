@@ -1,0 +1,51 @@
+# Byte-compiled / Python files
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python testing / coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# MLflow / artifacts
+mlruns/
+*.h5
+*.pt
+*.ckpt
+*.joblib
+
+# Docker
+*.dockerfile
+docker-compose.override.yml
+
+# K3s / Kubernetes temporary files
+*.yaml.bak
+*.swp
+
+# Ignore datasets (but keep folder)
+data/*
+!data/.gitkeep
+
+# Ignore training folder content initially
+training/*
+!training/.gitkeep
+
+# Ignore kubernetes jobs folder content initially
+kubernetes/jobs/*
+!kubernetes/jobs/.gitkeep
