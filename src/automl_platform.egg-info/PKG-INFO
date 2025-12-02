@@ -1,0 +1,56 @@
+Metadata-Version: 2.4
+Name: automl-platform
+Version: 0.1.0
+Summary: Add your description here
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.121.2
+Requires-Dist: pytest>=9.0.1
+Requires-Dist: pyyaml>=6.0.3
+Requires-Dist: uvicorn>=0.38.0
+
+# AutoML-Platform
+This project is a AutoML Platform that allows a user to have quick model and a deployed ready for inference model
+
+# Project set-up (uv)
+
+```bash
+uv sync
+```
+
+# First MVP
+
+With the first MVP we have the following workflow 
+```mermaid
+flowchart TD
+    A[Upload Dataset via API] --> B[Job Manager]
+    B --> C1[K3s Training Pod 1]
+    B --> C2[K3s Training Pod 2]
+    B --> C3[K3s Training Pod N]
+    C1 & C2 & C3 --> D[MLflow Tracking]
+    D --> E[Select Best Model]
+    E --> F[Deploy Model with KServe or BentoML]
+    F --> G[Inference API Endpoint]
+```
+
+# Final MVP
+THe ultimate goal would be to be able to have the follwing working architecure
+```mermaid
+flowchart TD
+    A[Upload Dataset and Prompt] --> B[Data Profiler: schema, types, stats]
+    B --> C[Intelligent Agent: LLM + Rules to plan pipelines]
+    C --> D[Training Orchestrator: launch K3s Jobs]
+
+    subgraph K3s Cluster
+        D --> P1[Training Pod 1: Model A]
+        D --> P2[Training Pod 2: Model B]
+        D --> P3[Training Pod 3: Model C]
+    end
+
+    P1 & P2 & P3 --> E[MLflow Tracking: metrics, params, artifacts]
+    E --> F[Model Selector: evaluate best model]
+    F --> G[Model Deployer: KServe or BentoML]
+    G --> H[Monitoring Dashboard: Prometheus, Grafana, Evidently]
+    H --> C
+    G --> I[Inference API Endpoint]
+```
