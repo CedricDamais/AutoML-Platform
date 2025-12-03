@@ -1,10 +1,10 @@
 import fastapi
 from fastapi import FastAPI, APIRouter, Request
 from fastapi.responses import JSONResponse
-from api.routes import health, core
+from .routes import health, core
 
-from exceptions.internalServerError import InternalServerError
-from exceptions.NotFoundError import DataSetNotFoundError
+from ..exceptions.internalServerError import InternalServerError
+from ..exceptions.notFoundError import DataSetNotFoundError
 
 app = FastAPI(
     title="AutoML API",
