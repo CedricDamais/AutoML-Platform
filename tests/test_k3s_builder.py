@@ -1,6 +1,6 @@
 import pytest
 import yaml
-from kubernetes.k3s_builder import (
+from src.kubernetes.k3s_builder import (
     create_k3s_project,
     k3s_deployment_to_yaml,
     k3s_kustomization_to_yaml,
