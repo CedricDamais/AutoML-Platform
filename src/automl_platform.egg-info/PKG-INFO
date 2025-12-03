@@ -20,7 +20,7 @@ uv sync
 
 # First MVP
 
-With the first MVP we have the following workflow 
+With the first MVP we have the following workflow:
 ```mermaid
 flowchart TD
     A[Upload Dataset via API] --> B[Job Manager]
