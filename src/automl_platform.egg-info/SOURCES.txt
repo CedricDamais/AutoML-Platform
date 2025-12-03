@@ -18,9 +18,12 @@ src/exceptions/notFoundError.py
 src/kubernetes/__init__.py
 src/kubernetes/k3s_builder.py
 src/orchestrator/job_scheduler.py
+src/training/__init__.py
+src/training/training.py
 src/utils/logger.py
 src/utils/metrics.py
 tests/test_api_routes.py
 tests/test_job_scheduler.py
 tests/test_k3s_builder.py
 tests/test_redis_workflow.py
+tests/test_training.py

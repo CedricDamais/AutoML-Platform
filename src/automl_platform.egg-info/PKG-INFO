@@ -8,15 +8,19 @@ Requires-Dist: fakeredis>=2.10.0
 Requires-Dist: fastapi>=0.121.2
 Requires-Dist: httpx>=0.24.0
 Requires-Dist: kubernetes>=34.1.0
+Requires-Dist: mlflow>=3.6.0
 Requires-Dist: pandas>=2.3.3
 Requires-Dist: pydantic>=2.12.4
-Requires-Dist: pytest>=7.0.0
 Requires-Dist: pytest-asyncio>=0.21.0
 Requires-Dist: pytest-cov>=4.0.0
 Requires-Dist: pytest-mock>=3.10.0
+Requires-Dist: pytest>=9.0.1
 Requires-Dist: pyyaml>=6.0.3
 Requires-Dist: redis>=7.1.0
+Requires-Dist: scikit-learn>=1.7.2
+Requires-Dist: torch>=2.9.1
 Requires-Dist: uvicorn>=0.38.0
+Requires-Dist: xgboost>=3.1.2
 
 # AutoML-Platform
 This project is a AutoML Platform that allows a user to have quick model and a deployed ready for inference model
@@ -29,7 +33,7 @@ uv sync
 
 # First MVP
 
-With the first MVP we have the following workflow 
+With the first MVP we have the following workflow:
 ```mermaid
 flowchart TD
     A[Upload Dataset via API] --> B[Job Manager]
@@ -43,7 +47,7 @@ flowchart TD
 ```
 
 # Final MVP
-THe ultimate goal would be to be able to have the follwing working architecure
+The ultimate goal would be to be able to have the following working architecture
 ```mermaid
 flowchart TD
     A[Upload Dataset and Prompt] --> B[Data Profiler: schema, types, stats]
