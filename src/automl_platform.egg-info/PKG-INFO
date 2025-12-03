@@ -10,7 +10,7 @@ Requires-Dist: pyyaml>=6.0.3
 Requires-Dist: uvicorn>=0.38.0
 
 # AutoML-Platform
-This project is a AutoML Platform that allows a user to have quick model and a deployed ready for inference model
+This project is an AutoML Platform that allows a user to have a quick model and a deployment-ready inference model
 
 # Project set-up (uv)
 
