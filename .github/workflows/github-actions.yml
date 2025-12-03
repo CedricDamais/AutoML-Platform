@@ -1,0 +1,13 @@
+name: GitHub Actions Demo
+on: [push]
+jobs:
+  deploy-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Setup the environment
+        run: uv sync
+      - name: Run the pytest testsuite
+        run: uv run pytest
