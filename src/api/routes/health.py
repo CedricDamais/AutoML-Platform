@@ -7,7 +7,7 @@ async def health_check():
     return {"status": "API up and Running"}
 
 @router.get("/ready")
-async def  readyness_check():
+async def readiness_check():
     """
     Check if the app is ready to be ran,
     Its not done yet

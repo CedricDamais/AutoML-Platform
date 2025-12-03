@@ -1,0 +1,4 @@
+# Requirements for the FastAPI part of the project
+fastapi
+uvicorn
+pydantic
