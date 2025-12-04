@@ -169,6 +169,7 @@ def train_model(data: Data):
             ),
             *(
                 [
+                    nn.ReLU(inplace=True),
                     nn.Linear(
                         in_features=params["hidden_dim"],
                         out_features=params["hidden_dim"],
@@ -176,6 +177,7 @@ def train_model(data: Data):
                 ]
                 * params["layers"]
             ),
+            nn.ReLU(inplace=True),
             nn.Linear(
                 in_features=params["hidden_dim"], out_features=params["output_dim"]
             ),
@@ -236,7 +238,10 @@ def train_torch_model(model: torch.nn.Module, data: Data, params: dict):
         train_dataset, batch_size=batch_size, shuffle=True
     )
 
-    criterion = nn.MSELoss()
+    if is_classification:
+        criterion = nn.CrossEntropyLoss()
+    else:
+        criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     mlflow.set_tracking_uri(uri="http://0.0.0.0:8080")
