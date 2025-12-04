@@ -50,7 +50,7 @@ class K3sService:
 
 
 def create_k3s_project(
-    name: str, modules: dict[str, str], start_port: int = 8000
+    name: str, modules: dict[str, str], start_port: int = 8081
 ) -> K3sProject:
     namespace = K3sNamespace(name=name)
     kustomization = K3sKustomization(
