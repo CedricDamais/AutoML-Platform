@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 DATASET_PATH=./data/
 MODEL_TYPE=""
-PARAMS={}
+PARAMS="{}"
 IS_CLASSIFICATION=0
 TARGET=""
 
