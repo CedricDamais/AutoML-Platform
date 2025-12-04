@@ -181,6 +181,7 @@ def train_model(data: Data):
             nn.Linear(
                 in_features=params["hidden_dim"], out_features=params["output_dim"]
             ),
+            nn.Softmax(),
         )
         train_torch_model(model=model, data=data, params=params)
     else:
