@@ -12,6 +12,7 @@ src/automl_platform.egg-info/SOURCES.txt
 src/automl_platform.egg-info/dependency_links.txt
 src/automl_platform.egg-info/requires.txt
 src/automl_platform.egg-info/top_level.txt
+src/dashboard/app.py
 src/exceptions/__init__.py
 src/exceptions/internalServerError.py
 src/exceptions/notFoundError.py
@@ -23,6 +24,7 @@ src/training/training.py
 src/utils/logger.py
 src/utils/metrics.py
 tests/test_api_routes.py
+tests/test_full_workflow.py
 tests/test_job_scheduler.py
 tests/test_k3s_builder.py
 tests/test_redis_workflow.py
