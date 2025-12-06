@@ -1,7 +1,7 @@
 from uuid import uuid4
-import os
 import subprocess
-from pathlib import Path
+import random
+import os
 
 from utils.logging import logger
 
@@ -13,26 +13,54 @@ class JobScheduler:
 
     def __init__(self):
         self.job_map = {}
-        self.docker_container_tag = None
+        self.docker_container_tags = []
 
     def build_params(self) -> dict:
         """
         Build the parameters for the different models.
+        Currently chooses 3 random sets of parameters for each model.
 
         Returns:
             dict: Parameters for the models
         """
         logger.info("Building model parameters")
-        params = {
-            "linear_regression": {},
-            "random_forest": {"n_estimators": 100, "max_depth": 10},
-            "xgboost": {"learning_rate": 0.1, "n_estimators": 100, "is_xgboost": True},
-            "feed_forward_nn": {
-                "layers": 10,
+        n_estimators_range = list(range(50, 201, 10))
+        max_depth_range = list(range(5, 21, 1))
+        learning_rate_range = [0.01, 0.05, 0.1, 0.2, 0.3]
+        hidden_layers_range = list(range(1, 21, 1))
+
+        rf_params = [
+            {
+                "n_estimators": random.choice(n_estimators_range),
+                "max_depth": random.choice(max_depth_range),
+            }
+            for _ in range(3)
+        ]
+
+        xgb_params = [
+            {
+                "learning_rate": random.choice(learning_rate_range),
+                "n_estimators": random.choice(n_estimators_range),
+                "is_xgboost": True,
+            }
+            for _ in range(3)
+        ]
+
+        nn_params = [
+            {
+                "layers": random.choice(hidden_layers_range),
                 "output_dim": 2,
                 "hidden_dim": 64,
                 "input_dim": 32,
-            },
+            }
+            for _ in range(3)
+        ]
+
+        params = {
+            "linear_regression": [{}],
+            "random_forest": rf_params,
+            "xgboost": xgb_params,
+            "feed_forward_nn": nn_params,
         }
         return params
 
@@ -60,35 +88,57 @@ class JobScheduler:
         """
         logger.info("Building Docker images for models")
         dataset_path = job_data.get("dataset_path", "")
+
+        if os.path.isabs(dataset_path):
+            try:
+                dataset_path = os.path.relpath(dataset_path)
+            except ValueError:
+                logger.warning(
+                    "Could not convert dataset path to relative path: %s", dataset_path
+                )
+
         target = job_data.get("target_name", "target")
-        params = self.build_params().get(model_type, {})
-        is_classification = 0
-        image_tag = f"automl_platform/{model_type.lower()}_model_image"
+
+        model_params_list = self.build_params().get(model_type, [{}])
+
         model_instance_name = self.get_model_instance_name(model_type)
+        is_classification = 0
 
-        logger.info("All parameters built for image creation")
-        logger.info("Building image for model type: %s", model_type)
+        self.docker_container_tags = []
 
-        image_build_cmd = [
-            "docker",
-            "build",
-            "--build-arg",
-            f"DATASET_PATH={dataset_path}",
-            "--build-arg",
-            f"MODEL_TYPE={model_instance_name}",
-            "--build-arg",
-            f"TARGET={target}",
-            "--build-arg",
-            f"PARAMS={params}",
-            "--build-arg",
-            f"IS_CLASSIFICATION={is_classification}",
-            "-t",
-            image_tag,
-            "dockers/",
-        ]
-        self.docker_container_tag = image_tag
-        subprocess.run(image_build_cmd, check=True)
-        logger.info("Docker image built with tag: %s", image_tag)
+        for i, params in enumerate(model_params_list):
+            image_tag = f"automl_platform/{model_type.lower()}_model_image_{i}"
+
+            logger.info(
+                "Building image %d for model type: %s with params: %s",
+                i,
+                model_type,
+                params,
+            )
+
+            image_build_cmd = [
+                "docker",
+                "build",
+                "-f",
+                "src/dockers/Dockerfile",
+                "--build-arg",
+                f"DATASET_PATH={dataset_path}",
+                "--build-arg",
+                f"MODEL_TYPE={model_instance_name}",
+                "--build-arg",
+                f"TARGET={target}",
+                "--build-arg",
+                f"PARAMS={params}",
+                "--build-arg",
+                f"IS_CLASSIFICATION={is_classification}",
+                "-t",
+                image_tag,
+                ".",
+            ]
+
+            subprocess.run(image_build_cmd, check=True)
+            logger.info("Docker image built with tag: %s", image_tag)
+            self.docker_container_tags.append(image_tag)
 
     def fill_job_map(self) -> None:
         """
@@ -96,14 +146,14 @@ class JobScheduler:
         this map will be used by the kubernetes compo
         """
         logger.info("Filling job map with job IDs and Docker container tags")
-        if self.docker_container_tag:
-            job_id = str(uuid4())
-
-            self.job_map[job_id] = self.docker_container_tag
-            logger.info("Job map filled: %s", self.job_map)
+        if self.docker_container_tags:
+            for tag in self.docker_container_tags:
+                job_id = str(uuid4())
+                self.job_map[job_id] = tag
+            logger.info("Job map updated: %s", self.job_map)
         else:
             logger.error(
-                "Docker container tag is not set. Cannot fill job map. Make sure the images were built"
+                "No Docker container tags set. Cannot fill job map. Make sure the images were built"
             )
 
     def get_job_map(self) -> dict:
