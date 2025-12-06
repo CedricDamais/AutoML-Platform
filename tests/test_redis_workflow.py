@@ -150,8 +150,13 @@ class TestWorkerJobProcessing:
                 job_scheduler.fill_job_map()
 
         # Assert
-        assert len(job_scheduler.job_map) == 4
-        assert mock_subprocess.call_count == 4
+        # linear_regression: 1
+        # random_forest: 3
+        # xgboost: 3
+        # feed_forward_nn: 3
+        # Total: 10
+        assert len(job_scheduler.job_map) == 10
+        assert mock_subprocess.call_count == 10
 
     @patch("subprocess.run")
     def test_worker_handles_malformed_json(self, mock_subprocess, fake_redis_server):
@@ -268,7 +273,10 @@ class TestEndToEndWorkflow:
 
         # Assert
         assert len(processed_jobs) == 2
-        assert len(job_scheduler.job_map) == 2
+        # linear_regression: 1
+        # random_forest: 3
+        # Total: 4
+        assert len(job_scheduler.job_map) == 4
         assert fake_redis_server.llen("job_queue") == 0
 
     def test_concurrent_job_enqueueing(self, fake_redis_server):

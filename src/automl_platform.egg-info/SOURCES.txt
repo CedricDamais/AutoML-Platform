@@ -12,7 +12,6 @@ src/automl_platform.egg-info/SOURCES.txt
 src/automl_platform.egg-info/dependency_links.txt
 src/automl_platform.egg-info/requires.txt
 src/automl_platform.egg-info/top_level.txt
-src/dashboard/app.py
 src/exceptions/__init__.py
 src/exceptions/internalServerError.py
 src/exceptions/notFoundError.py
