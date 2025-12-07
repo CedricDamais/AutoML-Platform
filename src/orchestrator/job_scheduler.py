@@ -6,6 +6,13 @@ import json
 
 from utils.logging import logger
 
+MODEL_NAMES = {
+    "linear_regression": "Linear",
+    "random_forest": "RandomForestClassifier",
+    "xgboost": "Xgboost",
+    "feed_forward_nn": "Sequential",
+}
+
 
 class JobScheduler:
     """
@@ -16,7 +23,8 @@ class JobScheduler:
         self.job_map = {}
         self.docker_container_tags = []
         self.enable_gpu = enable_gpu
-        logger.info(f"JobScheduler initialized with GPU support: {enable_gpu}")
+        logger.info("Initializing JobScheduler")
+        logger.info("JobScheduler initialized with GPU support: %s", enable_gpu)
 
     def build_params(self) -> dict:
         """
@@ -77,13 +85,7 @@ class JobScheduler:
         Returns:
             str: The model instance name
         """
-        model_names = {
-            "linear_regression": "Linear",
-            "random_forest": "RandomForestClassifier",
-            "xgboost": "Xgboost",
-            "feed_forward_nn": "Sequential",
-        }
-        return model_names.get(model_type, "UnknownModel")
+        return MODEL_NAMES.get(model_type, "UnknownModel")
 
     def build_images(
         self, job_data: dict, model_type: str, progress_callback=None
@@ -182,6 +184,11 @@ class JobScheduler:
         """
         Run all Docker containers that have been built.
         Mounts the mlruns directory so containers write directly to filesystem.
+        Right now im training sequentially, but this can be parallelized later.
+        With the K3S cluster this will be handled by kubernetes.
+        On each pod we will mount a persistent volume that points to the mlruns directory.
+        and they will all write to the mlflow tracking server. Each pods will be trained independently in parallel.
+        This is for local testing purposes.
         """
         logger.info("Running Docker containers for training")
 

@@ -254,7 +254,6 @@ def train_generic_model(
             is_classification=is_classification,
         )
 
-        # Log the model
         mlflow.sklearn.log_model(model, "model")
 
 

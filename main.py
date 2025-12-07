@@ -15,7 +15,7 @@ def main():
     try:
         redis_client = redis.Redis(
             host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", 6379)),
+            port=int(os.getenv("REDIS_PORT", "6379")),
             db=0,
             decode_responses=True,
         )
@@ -27,8 +27,8 @@ def main():
 
     # Configuration
     enable_gpu = os.getenv("ENABLE_GPU", "false").lower() == "true"
-    
-    logger.info(f"Initializing Job Scheduler (GPU: {enable_gpu})")
+
+    logger.info("Initializing Job Scheduler (GPU: %s)", enable_gpu)
     job_scheduler = JobScheduler(enable_gpu=enable_gpu)
 
     models_to_build = [
@@ -90,7 +90,6 @@ def main():
                         job_scheduler.fill_job_map()
                         logger.info("Current job map: %s", job_scheduler.job_map)
 
-                    # Run training containers
                     if request_id:
                         redis_client.hset(
                             f"request:{request_id}",
@@ -125,7 +124,6 @@ def main():
                             f"request:{request_id}",
                             mapping={"status": "FAILED", "message": str(e)},
                         )
-                    # Continue to next job instead of crashing
                     continue
 
             else:

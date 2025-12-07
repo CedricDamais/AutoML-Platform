@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-# Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 RED='\033[0;31m'
@@ -10,13 +9,11 @@ echo -e "${BLUE}=========================================${NC}"
 echo -e "${BLUE}   AutoML Platform Launcher   ${NC}"
 echo -e "${BLUE}=========================================${NC}"
 
-# Check for uv
 if ! command -v uv &> /dev/null; then
     echo -e "${RED}Error: uv is not installed. Please install it first.${NC}"
     exit 1
 fi
 
-# Function to cleanup background processes on exit
 cleanup() {
     echo -e "\n${RED}Stopping all services...${NC}"
     kill $(jobs -p) 2>/dev/null
@@ -25,7 +22,6 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM
 
-# Check if Redis is running (simple check)
 if ! (echo > /dev/tcp/localhost/6379) >/dev/null 2>&1; then
     echo -e "${RED}Warning: Redis does not seem to be running on localhost:6379${NC}"
     echo -e "${RED}Please start Redis before running the platform.${NC}"
@@ -41,7 +37,6 @@ echo -e "${GREEN}[1/4] Starting MLflow Server...${NC}"
 uv run mlflow server --backend-store-uri file:./mlruns --host 0.0.0.0 --port 5000 --serve-artifacts &
 MLFLOW_PID=$!
 
-# Wait for MLflow to be ready
 echo "Waiting for MLflow to start..."
 for i in {1..30}; do
     if (echo > /dev/tcp/localhost/5000) >/dev/null 2>&1; then

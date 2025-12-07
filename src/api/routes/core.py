@@ -70,7 +70,7 @@ async def send_dataset(req: DatasetRequest):
 
     logger.debug("Preparing to store dataset")
 
-    # Use request_id in filename to avoid collisions
+    # Use request_id in filename to avoid collisions ELSE there will be collision
     path_to_store_dataset = data_storage_path / f"{req.name}_{request_id}.csv"
 
     logger.debug("Received Data set from user")
@@ -89,18 +89,16 @@ async def send_dataset(req: DatasetRequest):
     }
 
     try:
-        # 1. Initialize job status in Redis
         redis_client.hset(
             f"request:{request_id}",
             mapping={
                 "status": "QUEUED",
                 "dataset_name": req.name,
                 "created_at": datetime.now().isoformat(),
-                "message": "Job queued for processing"
-            }
+                "message": "Job queued for processing",
+            },
         )
 
-        # 2. Push to queue
         redis_client.lpush("job_queue", json.dumps(job_data))
         logger.info("Job published to Redis queue: %s", job_data)
     except Exception as e:
@@ -114,5 +112,5 @@ async def send_dataset(req: DatasetRequest):
     return {
         "message": "Dataset received successfully, job queued for training",
         "request_id": request_id,
-        "status_url": f"/api/v1/jobs/{request_id}"
+        "status_url": f"/api/v1/jobs/{request_id}",
     }
