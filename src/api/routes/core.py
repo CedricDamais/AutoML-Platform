@@ -1,6 +1,8 @@
 import json
 import os
 from pathlib import Path
+from uuid import uuid4
+from datetime import datetime
 
 import redis
 from fastapi import APIRouter, HTTPException
@@ -25,6 +27,22 @@ except redis.RedisError as e:
     redis_client = None
 
 
+@router.get("/jobs/{request_id}")
+async def get_job_status(request_id: str):
+    """
+    Get the status of a specific job request.
+    """
+    if not redis_client:
+        raise HTTPException(status_code=503, detail="Redis unavailable")
+
+    job_key = f"request:{request_id}"
+    if not redis_client.exists(job_key):
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    status_info = redis_client.hgetall(job_key)
+    return status_info
+
+
 @router.post("/d_dataset")
 async def send_dataset(req: DatasetRequest):
     """
@@ -43,13 +61,17 @@ async def send_dataset(req: DatasetRequest):
             detail="Redis queue is unavailable. Cannot process any job.",
         )
 
+    request_id = str(uuid4())
+    logger.info("Processing new dataset request with ID: %s", request_id)
+
     logger.info("Storing dataset sent by user")
     data_storage_path = Path("data_storage")
     data_storage_path.mkdir(exist_ok=True)
 
     logger.debug("Preparing to store dataset")
 
-    path_to_store_dataset = data_storage_path / f"{req.name}.csv"
+    # Use request_id in filename to avoid collisions
+    path_to_store_dataset = data_storage_path / f"{req.name}_{request_id}.csv"
 
     logger.debug("Received Data set from user")
     logger.info(
@@ -59,6 +81,7 @@ async def send_dataset(req: DatasetRequest):
         f.write(req.dataset_csv)
 
     job_data = {
+        "request_id": request_id,
         "dataset_path": str(path_to_store_dataset.absolute()),
         "dataset_name": req.name,
         "target_name": req.target_name,
@@ -66,6 +89,18 @@ async def send_dataset(req: DatasetRequest):
     }
 
     try:
+        # 1. Initialize job status in Redis
+        redis_client.hset(
+            f"request:{request_id}",
+            mapping={
+                "status": "QUEUED",
+                "dataset_name": req.name,
+                "created_at": datetime.now().isoformat(),
+                "message": "Job queued for processing"
+            }
+        )
+
+        # 2. Push to queue
         redis_client.lpush("job_queue", json.dumps(job_data))
         logger.info("Job published to Redis queue: %s", job_data)
     except Exception as e:
@@ -78,4 +113,6 @@ async def send_dataset(req: DatasetRequest):
     logger.debug("Job successfully queued for processing")
     return {
         "message": "Dataset received successfully, job queued for training",
+        "request_id": request_id,
+        "status_url": f"/api/v1/jobs/{request_id}"
     }

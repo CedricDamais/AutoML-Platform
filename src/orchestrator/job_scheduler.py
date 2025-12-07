@@ -2,6 +2,7 @@ from uuid import uuid4
 import subprocess
 import random
 import os
+import json
 
 from utils.logging import logger
 
@@ -11,9 +12,11 @@ class JobScheduler:
     Singleton Job Manager class to handle all training jobs
     """
 
-    def __init__(self):
+    def __init__(self, enable_gpu=False):
         self.job_map = {}
         self.docker_container_tags = []
+        self.enable_gpu = enable_gpu
+        logger.info(f"JobScheduler initialized with GPU support: {enable_gpu}")
 
     def build_params(self) -> dict:
         """
@@ -82,7 +85,9 @@ class JobScheduler:
         }
         return model_names.get(model_type, "UnknownModel")
 
-    def build_images(self, job_data: dict, model_type: str) -> None:
+    def build_images(
+        self, job_data: dict, model_type: str, progress_callback=None
+    ) -> None:
         """
         Build the docker images for the different models.
         """
@@ -97,12 +102,15 @@ class JobScheduler:
                     "Could not convert dataset path to relative path: %s", dataset_path
                 )
 
+        dataset_filename = os.path.basename(dataset_path)
+
         target = job_data.get("target_name", "target")
 
         model_params_list = self.build_params().get(model_type, [{}])
+        total_images = len(model_params_list)
 
         model_instance_name = self.get_model_instance_name(model_type)
-        is_classification = 0
+        is_classification = job_data.get("is_classification", 0)
 
         self.docker_container_tags = []
 
@@ -122,13 +130,15 @@ class JobScheduler:
                 "-f",
                 "src/dockers/Dockerfile",
                 "--build-arg",
-                f"DATASET_PATH={dataset_path}",
+                f"DATA_PATH={dataset_path}",
+                "--build-arg",
+                f"DATASET_FILENAME={dataset_filename}",
                 "--build-arg",
                 f"MODEL_TYPE={model_instance_name}",
                 "--build-arg",
                 f"TARGET={target}",
                 "--build-arg",
-                f"PARAMS={params}",
+                f"PARAMS={json.dumps(params)}",
                 "--build-arg",
                 f"IS_CLASSIFICATION={is_classification}",
                 "-t",
@@ -139,6 +149,9 @@ class JobScheduler:
             subprocess.run(image_build_cmd, check=True)
             logger.info("Docker image built with tag: %s", image_tag)
             self.docker_container_tags.append(image_tag)
+
+            if progress_callback:
+                progress_callback(model_type, i + 1, total_images)
 
     def fill_job_map(self) -> None:
         """
@@ -164,3 +177,41 @@ class JobScheduler:
             dict: The job map
         """
         return self.job_map
+
+    def run_containers(self) -> None:
+        """
+        Run all Docker containers that have been built.
+        Mounts the mlruns directory so containers write directly to filesystem.
+        """
+        logger.info("Running Docker containers for training")
+
+        mlruns_path = os.path.abspath("./mlruns")
+
+        for job_id, image_tag in self.job_map.items():
+            logger.info("Running container for job %s with image %s", job_id, image_tag)
+
+            run_cmd = [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{mlruns_path}:/app/mlruns",
+                "-e",
+                "MLFLOW_TRACKING_URI=file:./mlruns",
+            ]
+
+            if self.enable_gpu and "feed_forward" in image_tag:
+                run_cmd.extend(["--gpus", "all"])
+                logger.info("Adding GPU support for container %s", job_id)
+
+            run_cmd.append(image_tag)
+
+            try:
+                result = subprocess.run(
+                    run_cmd, check=True, capture_output=True, text=True
+                )
+                logger.info("Container %s completed successfully", job_id)
+                logger.debug("Container output: %s", result.stdout)
+            except subprocess.CalledProcessError as e:
+                logger.error("Container %s failed with error: %s", job_id, e.stderr)
+                continue
