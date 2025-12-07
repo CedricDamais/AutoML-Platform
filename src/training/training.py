@@ -1,25 +1,26 @@
-from dataclasses import dataclass
-from typing import Tuple, Union
 import json
 import os
 import pathlib
+from dataclasses import dataclass
+from typing import Tuple, Union
 
-from sklearn import ensemble
-from sklearn.base import BaseEstimator
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import (
-    mean_absolute_error,
-    r2_score,
-    mean_squared_error,
-    accuracy_score,
-    f1_score,
-)
 import mlflow
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
 import xgboost as xgb
+from sklearn import ensemble
+from sklearn.base import BaseEstimator
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+)
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
 
 
 @dataclass
@@ -87,24 +88,31 @@ def calculate_and_log_metrics(
     step: int = None,
 ):
     """Calculate and log both regression and classification metrics."""
-    # Calculate regression metrics
-    train_mae = mean_absolute_error(y_train_true, y_train_pred)
-    test_mae = mean_absolute_error(y_test_true, y_test_pred)
-    train_rmse = np.sqrt(mean_squared_error(y_train_true, y_train_pred))
-    test_rmse = np.sqrt(mean_squared_error(y_test_true, y_test_pred))
-    train_r2 = r2_score(y_train_true, y_train_pred)
-    test_r2 = r2_score(y_test_true, y_test_pred)
 
-    # Log regression metrics
-    mlflow.log_metric("train_mae", train_mae, step=step)
-    mlflow.log_metric("test_mae", test_mae, step=step)
-    mlflow.log_metric("train_rmse", train_rmse, step=step)
-    mlflow.log_metric("test_rmse", test_rmse, step=step)
-    mlflow.log_metric("train_r2", train_r2, step=step)
-    mlflow.log_metric("test_r2", test_r2, step=step)
+    if not is_classification:
+        # Calculate regression metrics
+        train_mae = mean_absolute_error(y_train_true, y_train_pred)
+        test_mae = mean_absolute_error(y_test_true, y_test_pred)
+        train_rmse = np.sqrt(mean_squared_error(y_train_true, y_train_pred))
+        test_rmse = np.sqrt(mean_squared_error(y_test_true, y_test_pred))
+        train_r2 = r2_score(y_train_true, y_train_pred)
+        test_r2 = r2_score(y_test_true, y_test_pred)
+
+        # Log regression metrics
+        mlflow.log_metric("train_mae", train_mae, step=step)
+        mlflow.log_metric("test_mae", test_mae, step=step)
+        mlflow.log_metric("train_rmse", train_rmse, step=step)
+        mlflow.log_metric("test_rmse", test_rmse, step=step)
+        mlflow.log_metric("train_r2", train_r2, step=step)
+        mlflow.log_metric("test_r2", test_r2, step=step)
+
+        if step is None or (step + 1) % 10 == 0:
+            print(f"Train MAE: {train_mae:.4f}, Test MAE: {test_mae:.4f}")
+            print(f"Train RMSE: {train_rmse:.4f}, Test RMSE: {test_rmse:.4f}")
+            print(f"Train R²: {train_r2:.4f}, Test R²: {test_r2:.4f}")
 
     # Calculate and log classification metrics if applicable
-    if is_classification:
+    else:
         # Convert continuous predictions to class labels
         y_train_pred_class = np.round(y_train_pred).astype(int)
         y_test_pred_class = np.round(y_test_pred).astype(int)
@@ -130,11 +138,6 @@ def calculate_and_log_metrics(
                 f"Train Accuracy: {train_accuracy:.4f}, Test Accuracy: {test_accuracy:.4f}"
             )
             print(f"Train F1: {train_f1:.4f}, Test F1: {test_f1:.4f}")
-    else:
-        if step is None or (step + 1) % 10 == 0:
-            print(f"Train MAE: {train_mae:.4f}, Test MAE: {test_mae:.4f}")
-            print(f"Train RMSE: {train_rmse:.4f}, Test RMSE: {test_rmse:.4f}")
-            print(f"Train R²: {train_r2:.4f}, Test R²: {test_r2:.4f}")
 
 
 def train_model(data: Data):
@@ -146,7 +149,26 @@ def train_model(data: Data):
     if raw_model is None:
         raise ValueError("MODEL environment variable is not set")
 
+    is_classification = bool(int(os.environ.get("IS_CLASSIFICATION", "0")))
     params: dict = json.loads(raw_params)
+
+    # Encode labels if classification
+    y_train = data.y_train
+    y_test = data.y_test
+    label_encoder = None
+
+    if is_classification:
+        label_encoder = LabelEncoder()
+        y_train = label_encoder.fit_transform(data.y_train)
+        y_test = label_encoder.transform(data.y_test)
+        # Create new Data object with encoded labels
+        data = Data(
+            X_train=data.X_train,
+            X_test=data.X_test,
+            y_train=pd.Series(y_train),
+            y_test=pd.Series(y_test),
+        )
+
     if raw_model == "RandomForestClassifier":
         model = ensemble.RandomForestClassifier(**params)
         train_generic_model(model=model, data=data, params=params)
@@ -161,8 +183,15 @@ def train_model(data: Data):
         train_generic_model(model=model, data=data, params=params)
     elif raw_model == "Linear":
         model = nn.Linear(**params)
-        train_torch_model(model=model, data=data, params=params)
+        train_torch_model(
+            model=model, data=data, params=params, is_classification=is_classification
+        )
     elif raw_model == "Sequential":
+        # Dynamically determine input_dim from the data
+        input_dim = data.X_train.shape[1]
+        params["input_dim"] = input_dim
+        if is_classification:
+            params["output_dim"] = len(np.unique(data.y_train))
         model = nn.Sequential(
             nn.Linear(
                 in_features=params["input_dim"], out_features=params["hidden_dim"]
@@ -181,9 +210,11 @@ def train_model(data: Data):
             nn.Linear(
                 in_features=params["hidden_dim"], out_features=params["output_dim"]
             ),
-            nn.Softmax(),
+            # Remove Softmax for CrossEntropyLoss
         )
-        train_torch_model(model=model, data=data, params=params)
+        train_torch_model(
+            model=model, data=data, params=params, is_classification=is_classification
+        )
     else:
         raise ValueError(f"Unhandled model type: {raw_model}.")
 
@@ -193,22 +224,28 @@ def train_generic_model(
 ):
     """Train sklearn models (RandomForest, XGBoost, etc.)"""
     is_classification = bool(int(os.environ.get("IS_CLASSIFICATION", "0")))
+    model_name = os.environ.get("MODEL", "Unknown")
+    dataset_name = os.environ.get("DATASET_FILENAME", "dataset")
 
-    mlflow.set_tracking_uri(uri="http://0.0.0.0:8080")
+    mlflow.set_experiment("automl-experiments")
 
-    with mlflow.start_run():
-        # Log parameters
+    run_name = f"{model_name}_{dataset_name}"
+
+    with mlflow.start_run(run_name=run_name):
+        mlflow.set_tag("model_type", model_name)
+        mlflow.set_tag("dataset", dataset_name)
+        mlflow.set_tag(
+            "task_type", "classification" if is_classification else "regression"
+        )
+        mlflow.set_tag("framework", "sklearn")
         for name, value in params.items():
             mlflow.log_param(name, value)
 
-        # Train the model
         model.fit(data.X_train, data.y_train)
 
-        # Make predictions
         train_predictions = model.predict(data.X_train)
         test_predictions = model.predict(data.X_test)
 
-        # Calculate and log all metrics
         calculate_and_log_metrics(
             y_train_true=data.y_train,
             y_train_pred=train_predictions,
@@ -221,19 +258,25 @@ def train_generic_model(
         mlflow.sklearn.log_model(model, "model")
 
 
-def train_torch_model(model: torch.nn.Module, data: Data, params: dict):
+def train_torch_model(
+    model: torch.nn.Module, data: Data, params: dict, is_classification: bool = False
+):
     num_epochs = int(os.environ.get("NUM_EPOCHS", "100"))
     learning_rate = float(os.environ.get("LEARNING_RATE", "0.001"))
     batch_size = int(os.environ.get("BATCH_SIZE", "32"))
-    is_classification = bool(os.environ.get("IS_CLASSIFICATION", 0))
+    model_name = os.environ.get("MODEL", "Unknown")
+    dataset_name = os.environ.get("DATASET_FILENAME", "dataset")
 
-    # Convert data to tensors
+    if is_classification:
+        y_train_tensor = torch.LongTensor(data.y_train.values)
+        y_test_tensor = torch.LongTensor(data.y_test.values)
+    else:
+        y_train_tensor = torch.FloatTensor(data.y_train.values).reshape(-1, 1)
+        y_test_tensor = torch.FloatTensor(data.y_test.values).reshape(-1, 1)
+
     X_train_tensor = torch.FloatTensor(data.X_train.values)
-    y_train_tensor = torch.FloatTensor(data.y_train.values).reshape(-1, 1)
     X_test_tensor = torch.FloatTensor(data.X_test.values)
-    y_test_tensor = torch.FloatTensor(data.y_test.values).reshape(-1, 1)
 
-    # Create data loaders
     train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True
@@ -245,17 +288,23 @@ def train_torch_model(model: torch.nn.Module, data: Data, params: dict):
         criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    mlflow.set_tracking_uri(uri="http://0.0.0.0:8080")
+    mlflow.set_experiment("automl-experiments")
 
-    with mlflow.start_run():
-        # Log parameters
+    run_name = f"{model_name}_{dataset_name}"
+
+    with mlflow.start_run(run_name=run_name):
+        mlflow.set_tag("model_type", model_name)
+        mlflow.set_tag("dataset", dataset_name)
+        mlflow.set_tag(
+            "task_type", "classification" if is_classification else "regression"
+        )
+        mlflow.set_tag("framework", "pytorch")
         mlflow.log_param("num_epochs", num_epochs)
         mlflow.log_param("learning_rate", learning_rate)
         mlflow.log_param("batch_size", batch_size)
         for name, value in params.items():
             mlflow.log_param(name, value)
 
-        # Training loop
         for epoch in range(num_epochs):
             model.train()
             total_loss = 0
@@ -278,17 +327,22 @@ def train_torch_model(model: torch.nn.Module, data: Data, params: dict):
                 test_predictions = model(X_test_tensor)
                 test_loss = criterion(test_predictions, y_test_tensor).item()
 
-                # Convert to numpy for sklearn metrics
-                y_train_np = y_train_tensor.numpy().flatten()
-                train_pred_np = train_predictions.numpy().flatten()
-                y_test_np = y_test_tensor.numpy().flatten()
-                test_pred_np = test_predictions.numpy().flatten()
+                if is_classification:
+                    _, train_pred_classes = torch.max(train_predictions, 1)
+                    _, test_pred_classes = torch.max(test_predictions, 1)
+                    y_train_np = y_train_tensor.numpy()
+                    train_pred_np = train_pred_classes.numpy()
+                    y_test_np = y_test_tensor.numpy()
+                    test_pred_np = test_pred_classes.numpy()
+                else:
+                    y_train_np = y_train_tensor.numpy().flatten()
+                    train_pred_np = train_predictions.numpy().flatten()
+                    y_test_np = y_test_tensor.numpy().flatten()
+                    test_pred_np = test_predictions.numpy().flatten()
 
-            # Log training loss
             mlflow.log_metric("train_loss", avg_loss, step=epoch)
             mlflow.log_metric("test_loss", test_loss, step=epoch)
 
-            # Calculate and log all metrics
             calculate_and_log_metrics(
                 y_train_true=y_train_np,
                 y_train_pred=train_pred_np,
@@ -298,7 +352,6 @@ def train_torch_model(model: torch.nn.Module, data: Data, params: dict):
                 step=epoch,
             )
 
-        # Log the model
         mlflow.pytorch.log_model(model, "model")
 
 

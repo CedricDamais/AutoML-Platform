@@ -143,9 +143,9 @@ class TestJobScheduler:
 
         # Assert
         call_args = mock_subprocess.call_args[0][0]
-        # The path might be converted to relative, so we check if it ends with the filename
+        # Check for DATA_PATH (the actual build arg name used)
         assert any(
-            arg.startswith("DATASET_PATH=") and arg.endswith("iris.csv")
+            arg.startswith("DATA_PATH=") and arg.endswith("iris.csv")
             for arg in call_args
         )
 
