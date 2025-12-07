@@ -160,8 +160,10 @@ class JobScheduler:
         """
         logger.info("Filling job map with job IDs and Docker container tags")
         if self.docker_container_tags:
-            for tag in self.docker_container_tags:
-                job_id = str(uuid4())
+            for _, tag in enumerate(self.docker_container_tags):
+                model_part = tag.split("/")[-1].replace("_", "-")
+                job_id = f"job-{model_part}-{str(uuid4())[:8]}"
+
                 self.job_map[job_id] = tag
             logger.info("Job map updated: %s", self.job_map)
         else:

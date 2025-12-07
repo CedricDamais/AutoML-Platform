@@ -1,11 +1,13 @@
 import json
 import os
+from pdb import run
 import time
 
 import redis
 
 from src.orchestrator.job_scheduler import JobScheduler
 from utils.logging import logger
+from src.kubernetes.k3s_builder import create_k3s_project, run_k3s_project
 
 
 def main():
@@ -27,7 +29,7 @@ def main():
 
     # Configuration
     enable_gpu = os.getenv("ENABLE_GPU", "false").lower() == "true"
-    
+
     logger.info(f"Initializing Job Scheduler (GPU: {enable_gpu})")
     job_scheduler = JobScheduler(enable_gpu=enable_gpu)
 
@@ -100,9 +102,14 @@ def main():
                             },
                         )
 
-                    logger.info("Starting training containers...")
-                    job_scheduler.run_containers()
-                    logger.info("All training containers completed")
+                    logger.info("Starting training pods in K3s cluster")
+
+                    project = create_k3s_project(
+                        "automl-training", job_scheduler.job_map
+                    )
+                    run_k3s_project(project)
+
+                    logger.info("All training pods completed")
 
                     if request_id:
                         redis_client.hset(
