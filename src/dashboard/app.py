@@ -10,7 +10,7 @@ from plotly.subplots import make_subplots
 
 # Configuration
 API_URL = os.getenv("API_URL", "http://localhost:8000/api/v1")
-MLFLOW_URL = os.getenv("MLFLOW_URL", "http://localhost:5000")
+MLFLOW_URL = os.getenv("MLFLOW_URL", "http://localhost:5001")
 
 st.set_page_config(
     page_title="AutoML Platform Dashboard", page_icon="🚀", layout="wide"
