@@ -49,3 +49,5 @@ training/*
 # Ignore kubernetes jobs folder content initially
 kubernetes/jobs/*
 !kubernetes/jobs/.gitkeep
+
+data_storage/

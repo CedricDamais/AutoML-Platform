@@ -100,6 +100,7 @@ def k3s_deployment_to_yaml(deployment: K3sDeployment, **kwargs) -> str:
             "metadata": metadata,
             "spec": {
                 "replicas": 1,
+                "restartPolicy": "Never",
                 "selector": {
                     "matchLabels": labels,
                 },
