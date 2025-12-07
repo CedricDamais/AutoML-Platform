@@ -16,20 +16,48 @@ if ! command -v uv &> /dev/null; then
     exit 1
 fi
 
-# All the ports used by the services
-USED_PORTS=("5001" "8000" "8501")
+PID_SAVE_LOCATION='/tmp/pids.txt'
+clear_pids() {
+    echo '' > "$PID_SAVE_LOCATION"
+}
+
+save_pid() {
+    echo "$1" >> "$PID_SAVE_LOCATION"
+}
+
+recurse_kill() {
+    local pid=$1
+
+    if [[ -z "$pid" ]] || ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+        return
+    fi
+
+    local child_pids=$(pgrep -P "$pid")
+    for child in $child_pids; do
+        recurse_kill "$child"
+    done
+
+    kill -9 "$pid" 2>/dev/null
+}
+
+kill_pids() {
+    [ -e "$PID_SAVE_LOCATION" ] || return
+    while IFS= read -r pid; do
+        [ -n "$pid" ] && recurse_kill "$pid"
+    done < "$PID_SAVE_LOCATION"
+}
 
 # Function to cleanup background processes on exit
 cleanup() {
     echo -e "\n${BLUE}Cleanup...${NC}"
-    for port in "${USED_PORTS[@]}"; do
-        kill -9 $(lsof -t -i:$port -sTCP:LISTEN) 2> /dev/null
-    done
+    kill_pids
 }
 
 cleanup
 
 [ "$1" = '--stop' ] && exit
+
+clear_pids
 
 trap cleanup SIGINT SIGTERM
 
@@ -48,6 +76,7 @@ fi
 echo -e "${GREEN}[1/4] Starting MLflow Server...${NC}"
 uv run mlflow server --backend-store-uri file:./mlruns --host 0.0.0.0 --port 5001 --serve-artifacts &
 MLFLOW_PID=$!
+save_pid "$MLFLOW_PID"
 
 # Wait for MLflow to be ready
 echo "Waiting for MLflow to start..."
@@ -62,15 +91,19 @@ done
 echo -e "${GREEN}[2/4] Starting API Server...${NC}"
 uv run uvicorn src.api.main:app --reload --port 8000 &
 API_PID=$!
+save_pid "$API_PID"
+
 sleep 2
 
 echo -e "${GREEN}[3/4] Starting Job Worker...${NC}"
 uv run python main.py &
 WORKER_PID=$!
+save_pid "$WORKER_PID"
 
 echo -e "${GREEN}[4/4] Starting Dashboard...${NC}"
 uv run streamlit run src/dashboard/app.py --server.port 8501 &
 DASHBOARD_PID=$!
+save_pid "$DASHBOARD_PID"
 
 sleep 2
 
