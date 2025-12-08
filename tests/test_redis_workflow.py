@@ -122,7 +122,8 @@ class TestWorkerJobProcessing:
                 job_scheduler.fill_job_map()
 
         # Assert
-        assert len(job_scheduler.job_map) == 1
+        # linear_regression now builds 3 images
+        assert len(job_scheduler.job_map) == 3
         assert fake_redis_server.llen("job_queue") == 0
 
     @patch("subprocess.run")
@@ -150,13 +151,13 @@ class TestWorkerJobProcessing:
                 job_scheduler.fill_job_map()
 
         # Assert
-        # linear_regression: 1
+        # linear_regression: 3
         # random_forest: 3
         # xgboost: 3
         # feed_forward_nn: 3
-        # Total: 10
-        assert len(job_scheduler.job_map) == 10
-        assert mock_subprocess.call_count == 10
+        # Total: 12
+        assert len(job_scheduler.job_map) == 12
+        assert mock_subprocess.call_count == 12
 
     @patch("subprocess.run")
     def test_worker_handles_malformed_json(self, mock_subprocess, fake_redis_server):
@@ -199,13 +200,18 @@ class TestWorkerJobProcessing:
         fake_redis_server.lpush("job_queue", json.dumps(job1))
         fake_redis_server.lpush("job_queue", json.dumps(job2))
 
-        # Mock subprocess to fail first, succeed second
+        # Mock subprocess to fail on first call (first job fails immediately)
+        # then succeed for all 3 builds of second job
         mock_subprocess.side_effect = [
-            subprocess.CalledProcessError(1, "docker build"),
-            Mock(returncode=0),
+            subprocess.CalledProcessError(
+                1, "docker build"
+            ),  # job1 build 1 fails (stops build_images)
+            Mock(returncode=0),  # job2 build 1 succeeds
+            Mock(returncode=0),  # job2 build 2 succeeds
+            Mock(returncode=0),  # job2 build 3 succeeds
         ]
 
-        # Act - Process first job (fails)
+        # Act - Process first job (fails on first build attempt)
         result = fake_redis_server.brpop("job_queue", timeout=1)
         if result:
             _, job_data_json = result
@@ -213,7 +219,7 @@ class TestWorkerJobProcessing:
             try:
                 job_scheduler.build_images(job_data, "linear_regression")
             except subprocess.CalledProcessError:
-                pass  # Expected failure
+                pass  # Expected failure - build_images stops on first subprocess failure
 
         # Process second job (succeeds)
         result = fake_redis_server.brpop("job_queue", timeout=1)
@@ -224,7 +230,8 @@ class TestWorkerJobProcessing:
             job_scheduler.fill_job_map()
 
         # Assert second job was processed successfully
-        assert len(job_scheduler.job_map) == 1
+        # linear_regression now builds 3 images
+        assert len(job_scheduler.job_map) == 3
 
 
 class TestEndToEndWorkflow:
@@ -273,10 +280,10 @@ class TestEndToEndWorkflow:
 
         # Assert
         assert len(processed_jobs) == 2
-        # linear_regression: 1
+        # linear_regression: 3
         # random_forest: 3
-        # Total: 4
-        assert len(job_scheduler.job_map) == 4
+        # Total: 6
+        assert len(job_scheduler.job_map) == 6
         assert fake_redis_server.llen("job_queue") == 0
 
     def test_concurrent_job_enqueueing(self, fake_redis_server):

@@ -12,11 +12,9 @@ class JobScheduler:
     Singleton Job Manager class to handle all training jobs
     """
 
-    def __init__(self, enable_gpu=False):
+    def __init__(self):
         self.job_map = {}
         self.docker_container_tags = []
-        self.enable_gpu = enable_gpu
-        logger.info(f"JobScheduler initialized with GPU support: {enable_gpu}")
 
     def build_params(self) -> dict:
         """
@@ -60,7 +58,9 @@ class JobScheduler:
         ]
 
         params = {
-            "linear_regression": [{}],
+            "linear_regression": [
+                {"in_features": 32, "out_features": 2} for _ in range(3)
+            ],
             "random_forest": rf_params,
             "xgboost": xgb_params,
             "feed_forward_nn": nn_params,
@@ -140,6 +140,8 @@ class JobScheduler:
                 "--build-arg",
                 f"PARAMS={json.dumps(params)}",
                 "--build-arg",
+                f"MLFLOW_EXPERIMENT={job_data.get('mlflow_experiment', 'Default')}",
+                "--build-arg",
                 f"IS_CLASSIFICATION={is_classification}",
                 "-t",
                 image_tag,
@@ -201,10 +203,6 @@ class JobScheduler:
                 "-e",
                 "MLFLOW_TRACKING_URI=file:./mlruns",
             ]
-
-            if self.enable_gpu and "feed_forward" in image_tag:
-                run_cmd.extend(["--gpus", "all"])
-                logger.info("Adding GPU support for container %s", job_id)
 
             run_cmd.append(image_tag)
 

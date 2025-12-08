@@ -182,6 +182,12 @@ def train_model(data: Data):
         model = xgb.XGBRegressor(**params)
         train_generic_model(model=model, data=data, params=params)
     elif raw_model == "Linear":
+        params["in_features"] = data.X_train.shape[1]
+        if is_classification:
+            params["out_features"] = len(np.unique(data.y_train))
+        else:
+            params["out_features"] = 1
+
         model = nn.Linear(**params)
         train_torch_model(
             model=model, data=data, params=params, is_classification=is_classification
@@ -192,6 +198,9 @@ def train_model(data: Data):
         params["input_dim"] = input_dim
         if is_classification:
             params["output_dim"] = len(np.unique(data.y_train))
+        else:
+            params["output_dim"] = 1
+
         model = nn.Sequential(
             nn.Linear(
                 in_features=params["input_dim"], out_features=params["hidden_dim"]
@@ -226,12 +235,15 @@ def train_generic_model(
     is_classification = bool(int(os.environ.get("IS_CLASSIFICATION", "0")))
     model_name = os.environ.get("MODEL", "Unknown")
     dataset_name = os.environ.get("DATASET_FILENAME", "dataset")
+    mlflow_experiment_name = str(
+        os.environ.get("MLFLOW_EXPERIMENT", "automl-experiments")
+    )
 
-    mlflow.set_experiment("automl-experiments")
+    experiment = mlflow.set_experiment(mlflow_experiment_name)
 
     run_name = f"{model_name}_{dataset_name}"
 
-    with mlflow.start_run(run_name=run_name):
+    with mlflow.start_run(run_name=run_name, experiment_id=experiment.experiment_id):
         mlflow.set_tag("model_type", model_name)
         mlflow.set_tag("dataset", dataset_name)
         mlflow.set_tag(
@@ -255,7 +267,8 @@ def train_generic_model(
         )
 
         # Log the model
-        mlflow.sklearn.log_model(model, "model")
+        registered_name = f"{pathlib.Path(dataset_name).stem}_{model_name}"
+        mlflow.sklearn.log_model(model, "model", registered_model_name=registered_name)
 
 
 def train_torch_model(
@@ -288,11 +301,14 @@ def train_torch_model(
         criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    mlflow.set_experiment("automl-experiments")
+    mlflow_experiment_name = str(
+        os.environ.get("MLFLOW_EXPERIMENT", "automl-experiments")
+    )
+    experiment = mlflow.set_experiment(mlflow_experiment_name)
 
     run_name = f"{model_name}_{dataset_name}"
 
-    with mlflow.start_run(run_name=run_name):
+    with mlflow.start_run(run_name=run_name, experiment_id=experiment.experiment_id):
         mlflow.set_tag("model_type", model_name)
         mlflow.set_tag("dataset", dataset_name)
         mlflow.set_tag(
@@ -352,7 +368,8 @@ def train_torch_model(
                 step=epoch,
             )
 
-        mlflow.pytorch.log_model(model, "model")
+        registered_name = f"{pathlib.Path(dataset_name).stem}_{model_name}"
+        mlflow.pytorch.log_model(model, "model", registered_model_name=registered_name)
 
 
 def main():

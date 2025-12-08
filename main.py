@@ -27,11 +27,7 @@ def main():
         logger.error("Failed to connect to Redis: %s", e)
         return
 
-    # Configuration
-    enable_gpu = os.getenv("ENABLE_GPU", "false").lower() == "true"
-
-    logger.info(f"Initializing Job Scheduler (GPU: {enable_gpu})")
-    job_scheduler = JobScheduler(enable_gpu=enable_gpu)
+    job_scheduler = JobScheduler()
 
     models_to_build = [
         "linear_regression",
@@ -92,7 +88,6 @@ def main():
                         job_scheduler.fill_job_map()
                         logger.info("Current job map: %s", job_scheduler.job_map)
 
-                    # Run training containers
                     if request_id:
                         redis_client.hset(
                             f"request:{request_id}",
@@ -104,8 +99,17 @@ def main():
 
                     logger.info("Starting training pods in K3s cluster")
 
+                    mlflow_experiment = job_data.get(
+                        "mlflow_experiment", "automl-experiments"
+                    )
+
                     project = create_k3s_project(
-                        "automl-training", job_scheduler.job_map
+                        "automl-training",
+                        job_scheduler.job_map,
+                        env_vars={
+                            "REQUEST_ID": request_id,
+                            "MLFLOW_EXPERIMENT": mlflow_experiment,
+                        },
                     )
                     run_k3s_project(project)
 
@@ -132,7 +136,6 @@ def main():
                             f"request:{request_id}",
                             mapping={"status": "FAILED", "message": str(e)},
                         )
-                    # Continue to next job instead of crashing
                     continue
 
             else:

@@ -6,6 +6,10 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+FRONTEND_DIR="src/dashboard"
+FRONTEND_PORT="${DASHBOARD_PORT:-3000}"
+export NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}"
+
 eval $(minikube docker-env)
 
 echo -e "${BLUE}=========================================${NC}"
@@ -15,6 +19,12 @@ echo -e "${BLUE}=========================================${NC}"
 # Check for uv
 if ! command -v uv &> /dev/null; then
     echo -e "${RED}Error: uv is not installed. Please install it first.${NC}"
+    exit 1
+fi
+
+# Check for npm (Next.js dashboard)
+if ! command -v npm &> /dev/null; then
+    echo -e "${RED}Error: npm is not installed. Please install Node.js/npm to run the dashboard.${NC}"
     exit 1
 fi
 
@@ -49,10 +59,25 @@ kill_pids() {
     done < "$PID_SAVE_LOCATION"
 }
 
+force_kill_port() {
+    local port=$1
+    if command -v lsof >/dev/null 2>&1; then
+        local pids=$(lsof -t -i:$port 2>/dev/null)
+        if [ -n "$pids" ]; then
+            echo -e "${BLUE}Force killing processes on port $port...${NC}"
+            echo "$pids" | xargs kill -9 2>/dev/null
+        fi
+    fi
+}
+
 # Function to cleanup background processes on exit
 cleanup() {
     echo -e "\n${BLUE}Cleanup...${NC}"
     kill_pids
+    
+    force_kill_port 5001
+    force_kill_port 8000
+    force_kill_port "$FRONTEND_PORT"
 }
 
 cleanup
@@ -102,8 +127,15 @@ uv run python main.py &
 WORKER_PID=$!
 save_pid "$WORKER_PID"
 
-echo -e "${GREEN}[4/4] Starting Dashboard...${NC}"
-uv run streamlit run src/dashboard/app.py --server.port 8501 &
+echo -e "${GREEN}[4/4] Starting Next.js Dashboard...${NC}"
+(
+    cd "$FRONTEND_DIR" || exit 1
+    if [ ! -d node_modules ]; then
+        echo -e "${BLUE}Installing dashboard dependencies...${NC}"
+        npm install
+    fi
+    npm run dev -- --hostname 0.0.0.0 --port "$FRONTEND_PORT"
+) &
 DASHBOARD_PID=$!
 save_pid "$DASHBOARD_PID"
 
@@ -115,6 +147,6 @@ echo -e "${BLUE}=========================================${NC}"
 echo -e "${GREEN}Platform is running!${NC}"
 echo -e "MLflow:    http://localhost:5001"
 echo -e "API:       http://localhost:8000"
-echo -e "Dashboard: http://localhost:8501"
+echo -e "Dashboard: http://localhost:${FRONTEND_PORT}"
 echo -e "${BLUE}=========================================${NC}"
 echo -e "Press Ctrl+C to stop all services."

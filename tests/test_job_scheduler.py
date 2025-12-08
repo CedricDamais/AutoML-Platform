@@ -47,7 +47,13 @@ class TestJobScheduler:
     def test_build_params_linear_regression(self, job_scheduler):
         """Test linear regression parameters."""
         params = job_scheduler.build_params()
-        assert params["linear_regression"] == [{}]
+        assert isinstance(params["linear_regression"], list)
+        assert len(params["linear_regression"]) == 3
+        for p in params["linear_regression"]:
+            assert "in_features" in p
+            assert "out_features" in p
+            assert p["in_features"] == 32
+            assert p["out_features"] == 2
 
     def test_build_params_random_forest(self, job_scheduler):
         """Test random forest parameters."""
@@ -296,11 +302,11 @@ class TestJobSchedulerIntegration:
             job_scheduler.fill_job_map()
 
         # Assert
-        # linear_regression: 1
+        # linear_regression: 3
         # random_forest: 3
         # xgboost: 3
-        # Total: 7
-        assert len(job_scheduler.job_map) == 7
+        # Total: 9
+        assert len(job_scheduler.job_map) == 9
 
         # Verify all unique job IDs
         job_ids = list(job_scheduler.job_map.keys())

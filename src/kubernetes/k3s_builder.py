@@ -12,6 +12,7 @@ class K3sJob:
     namespace: K3sNamespace
     name: str
     docker_image: str
+    env_vars: dict[str, str] = None
 
 
 @dataclass
@@ -43,7 +44,11 @@ class K3sProject:
     modules: list[K3sModule]
 
 
-def create_k3s_project(name: str, modules: dict[str, str]) -> K3sProject:
+def create_k3s_project(
+    name: str,
+    modules: dict[str, str],
+    env_vars: dict[str, str] = None,
+) -> K3sProject:
     namespace = K3sNamespace(name=name)
     kustomization = K3sKustomization(
         namespace=namespace, resources=["namespace.yml"] + list(modules.keys())
@@ -56,6 +61,7 @@ def create_k3s_project(name: str, modules: dict[str, str]) -> K3sProject:
                 namespace=namespace,
                 name=module_name,
                 docker_image=docker_image,
+                env_vars=env_vars,
             ),
             kustomization=K3sKustomization(namespace=namespace, resources=["job.yml"]),
         )
@@ -67,6 +73,8 @@ def create_k3s_project(name: str, modules: dict[str, str]) -> K3sProject:
     )
 
 
+# TODO: use the user IP address instead of hardcoding it
+# Either we catch the IP from the user in his request if its not there we fallback to the local IP
 def k3s_job_to_yaml(job: K3sJob, **kwargs) -> str:
     labels = {
         "app": job.namespace.name,
@@ -79,7 +87,22 @@ def k3s_job_to_yaml(job: K3sJob, **kwargs) -> str:
     container_spec = {
         "name": job.name,
         "image": job.docker_image,
+        "imagePullPolicy": "Never",
+        "env": [
+            {
+                "name": "MLFLOW_TRACKING_URI",
+                "value": "http://10.188.96.124:5001",
+            }
+        ],
+        "resources": {
+            "requests": {"memory": "512Mi", "cpu": "500m"},
+            "limits": {"memory": "2Gi", "cpu": "1000m"},
+        },
     }
+
+    if job.env_vars:
+        for key, value in job.env_vars.items():
+            container_spec["env"].append({"name": key, "value": str(value)})
 
     return yaml.dump(
         {
