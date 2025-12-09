@@ -10,7 +10,7 @@ FRONTEND_DIR="src/dashboard"
 FRONTEND_PORT="${DASHBOARD_PORT:-3000}"
 export NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}"
 
-eval $(minikube docker-env)
+eval $(minikube docker-env --shell='bash')
 
 echo -e "${BLUE}=========================================${NC}"
 echo -e "${BLUE}   AutoML Platform Launcher   ${NC}"
@@ -74,7 +74,7 @@ force_kill_port() {
 cleanup() {
     echo -e "\n${BLUE}Cleanup...${NC}"
     kill_pids
-    
+
     force_kill_port 5001
     force_kill_port 8000
     force_kill_port "$FRONTEND_PORT"
