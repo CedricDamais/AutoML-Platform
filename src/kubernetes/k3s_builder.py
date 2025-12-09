@@ -73,8 +73,6 @@ def create_k3s_project(
     )
 
 
-# TODO: use the user IP address instead of hardcoding it
-# Either we catch the IP from the user in his request if its not there we fallback to the local IP
 def k3s_job_to_yaml(job: K3sJob, **kwargs) -> str:
     labels = {
         "app": job.namespace.name,
@@ -91,7 +89,7 @@ def k3s_job_to_yaml(job: K3sJob, **kwargs) -> str:
         "env": [
             {
                 "name": "MLFLOW_TRACKING_URI",
-                "value": "http://10.188.96.124:5001",
+                "value": f"http://{os.environ.get('IP_ADDR', '127.0.0.1')}:5001",
             }
         ],
         "resources": {

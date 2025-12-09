@@ -101,7 +101,7 @@ if ! (echo > /dev/tcp/localhost/6379) >/dev/null 2>&1; then
 fi
 
 echo -e "${GREEN}[1/4] Starting MLflow Server...${NC}"
-uv run mlflow server --backend-store-uri file:./mlruns --host 0.0.0.0 --port 5001 --serve-artifacts &
+uv run mlflow server --backend-store-uri file:./mlruns --host 0.0.0.0 --port 5001 --serve-artifacts > /dev/null 2>&1 &
 MLFLOW_PID=$!
 save_pid "$MLFLOW_PID"
 
@@ -116,13 +116,23 @@ for i in {1..30}; do
 done
 
 echo -e "${GREEN}[2/4] Starting API Server...${NC}"
-uv run uvicorn src.api.main:app --reload --port 8000 &
+uv run uvicorn src.api.main:app --reload --port 8000 > /dev/null 2>&1 &
 API_PID=$!
 save_pid "$API_PID"
 
 sleep 2
 
 echo -e "${GREEN}[3/4] Starting Job Worker...${NC}"
+if [ -z "$IP_ADDR"]; then
+    IP_ADDR=$(
+        if [[ $(uname) == "Darwin" ]]; then
+            ipconfig getifaddr en0
+        else
+            ip route get 1.1.1.1 | awk '{print $7; exit}'
+        fi
+    )
+fi
+export IP_ADDR
 uv run python main.py &
 WORKER_PID=$!
 save_pid "$WORKER_PID"
@@ -135,7 +145,7 @@ echo -e "${GREEN}[4/4] Starting Next.js Dashboard...${NC}"
         npm install
     fi
     npm run dev -- --hostname 0.0.0.0 --port "$FRONTEND_PORT"
-) &
+) > /dev/null 2>&1 &
 DASHBOARD_PID=$!
 save_pid "$DASHBOARD_PID"
 

@@ -25,6 +25,7 @@ htmlcov/
 
 # MLflow / artifacts
 mlruns/
+mlartifacts/*
 *.h5
 *.pt
 *.ckpt
