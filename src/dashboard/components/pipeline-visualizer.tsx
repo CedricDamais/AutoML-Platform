@@ -9,7 +9,6 @@ const steps = [
 	{ key: "UPLOAD", label: "Upload" },
 	{ key: "BUILDING", label: "Building" },
 	{ key: "TRAINING", label: "Training" },
-	{ key: "EVALUATION", label: "Evaluation" },
 	{ key: "READY", label: "Ready" },
 ]
 
@@ -22,8 +21,10 @@ function resolveActiveIndex(status?: string) {
 	// QUEUED implies upload is done, waiting for build -> Active step is Building
 	if (normalized === "QUEUED" || normalized.includes("BUILD")) return 1
 	if (normalized.includes("TRAIN")) return 2
-	if (normalized.includes("EVALUAT")) return 3
-	if (normalized.includes("COMPLETE") || normalized.includes("READY") || normalized.includes("DEPLOY")) return 4
+	// If status mentions evaluation (legacy), map to Training (as it's post-training but before Ready) or Ready? 
+	// Since we are removing the step, let's treat it as part of training for now or just skip to ready if complete.
+	// Given the user wants to "remove the evaluation step", likely we just skip it.
+	if (normalized.includes("COMPLETE") || normalized.includes("READY") || normalized.includes("DEPLOY")) return 3
 
 	const idx = steps.findIndex((s) => s.key === normalized)
 	return idx >= 0 ? idx : -1
@@ -62,19 +63,17 @@ export default function PipelineVisualizer({ jobStatus }: PipelineVisualizerProp
 							return (
 								<div key={step.key} className="flex flex-col items-center text-center">
 									<div
-										className={`flex items-center justify-center h-12 w-12 rounded-full border transition-all duration-300 ${
-											isDone
+										className={`flex items-center justify-center h-12 w-12 rounded-full border transition-all duration-300 ${isDone
 												? "border-emerald-500/60 bg-emerald-500/10 text-emerald-400"
 												: isActive
 													? "border-blue-500/60 bg-blue-500/10 text-blue-400 animate-bounce"
 													: "border-border text-muted-foreground"
-										}`}
+											}`}
 									>
 										<Icon className={`h-5 w-5 ${isActive ? "animate-spin" : ""}`} />
 									</div>
-									<p className={`mt-2 text-xs font-medium transition-colors ${
-										isDone ? "text-emerald-400" : isActive ? "text-blue-400" : "text-muted-foreground"
-									}`}>
+									<p className={`mt-2 text-xs font-medium transition-colors ${isDone ? "text-emerald-400" : isActive ? "text-blue-400" : "text-muted-foreground"
+										}`}>
 										{step.label}
 									</p>
 								</div>

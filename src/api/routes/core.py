@@ -6,6 +6,7 @@ from datetime import datetime
 
 import redis
 from fastapi import APIRouter, HTTPException
+import mlflow
 
 from utils.logging import logger
 
@@ -25,6 +26,9 @@ try:
 except redis.RedisError as e:
     logger.error("Failed to connect to Redis: %s", e)
     redis_client = None
+
+
+mlflow.set_tracking_uri("http://localhost:5001")
 
 
 @router.get("/jobs/{request_id}")
@@ -113,6 +117,13 @@ async def send_dataset(req: DatasetRequest):
         f.write(req.dataset_csv)
 
     logger.info("Experiment will be named : %s", req.mlflow_experiment or "Default")
+    
+    experiment_name = req.mlflow_experiment or "Default"
+    try:
+        logger.info("Creating/Setting experiment: %s", experiment_name)
+        mlflow.set_experiment(experiment_name)
+    except Exception as e:
+        logger.error("Failed to create experiment in MLflow: %s", e)
 
     job_data = {
         "request_id": request_id,
@@ -124,7 +135,6 @@ async def send_dataset(req: DatasetRequest):
     }
 
     try:
-        # 1. Initialize job status in Redis
         redis_client.hset(
             f"request:{request_id}",
             mapping={
@@ -136,7 +146,6 @@ async def send_dataset(req: DatasetRequest):
             },
         )
 
-        # 2. Push to queue
         redis_client.lpush("job_queue", json.dumps(job_data))
         logger.info("Job published to Redis queue: %s", job_data)
     except Exception as e:

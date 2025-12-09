@@ -4,6 +4,7 @@ from pdb import run
 import time
 
 import redis
+import mlflow
 
 from src.orchestrator.job_scheduler import JobScheduler
 from utils.logging import logger
@@ -112,8 +113,35 @@ def main():
                         },
                     )
                     run_k3s_project(project)
-
-                    logger.info("All training pods completed")
+                    
+                    logger.info("Waiting for training pods to complete (polling MLflow)...")
+                    
+                    while True:
+                        try:
+                            experiment = mlflow.get_experiment_by_name(mlflow_experiment)
+                            if not experiment:
+                                time.sleep(2)
+                                continue
+                                
+                            runs = mlflow.search_runs(experiment_ids=[experiment.experiment_id], filter_string="", run_view_type=mlflow.entities.ViewType.ACTIVE_ONLY)
+                            
+                            if runs.empty:
+                                time.sleep(2)
+                                continue
+                            
+                            active_runs = runs[runs['status'].isin(['RUNNING', 'SCHEDULED'])]
+                            finished_runs = runs[runs['status'].isin(['FINISHED', 'FAILED', 'KILLED'])]
+                            
+                            total_visible_runs = len(active_runs) + len(finished_runs)
+                            
+                            if total_visible_runs > 0 and len(active_runs) == 0:
+                                logger.info("All MLflow runs finished.")
+                                break
+                                
+                            time.sleep(5)
+                        except Exception as e:
+                            logger.error(f"Error polling MLflow: {e}")
+                            time.sleep(5)
 
                     if request_id:
                         redis_client.hset(
@@ -123,7 +151,6 @@ def main():
                                 "message": "All training completed successfully",
                             },
                         )
-                        # Store the final job map in Redis for the dashboard to see
                         redis_client.hset(
                             f"request:{request_id}",
                             mapping={"job_map": json.dumps(job_scheduler.job_map)},
