@@ -33,7 +33,7 @@ class TestJobScheduler:
     def test_initialization(self, job_scheduler):
         """Test JobScheduler initialization."""
         assert job_scheduler.job_map == {}
-        assert job_scheduler.docker_container_tag is None
+        assert job_scheduler.docker_container_tags == []
 
     def test_build_params_returns_all_models(self, job_scheduler):
         """Test that build_params returns parameters for all supported models."""
@@ -47,29 +47,43 @@ class TestJobScheduler:
     def test_build_params_linear_regression(self, job_scheduler):
         """Test linear regression parameters."""
         params = job_scheduler.build_params()
-        assert params["linear_regression"] == {}
+        assert isinstance(params["linear_regression"], list)
+        assert len(params["linear_regression"]) == 3
+        for p in params["linear_regression"]:
+            assert "in_features" in p
+            assert "out_features" in p
+            assert p["in_features"] == 32
+            assert p["out_features"] == 2
 
     def test_build_params_random_forest(self, job_scheduler):
         """Test random forest parameters."""
         params = job_scheduler.build_params()
-        assert params["random_forest"]["n_estimators"] == 100
-        assert params["random_forest"]["max_depth"] == 10
+        assert isinstance(params["random_forest"], list)
+        assert len(params["random_forest"]) == 3
+        for p in params["random_forest"]:
+            assert "n_estimators" in p
+            assert "max_depth" in p
 
     def test_build_params_xgboost(self, job_scheduler):
         """Test XGBoost parameters."""
         params = job_scheduler.build_params()
-        assert params["xgboost"]["learning_rate"] == 0.1
-        assert params["xgboost"]["n_estimators"] == 100
-        assert params["xgboost"]["is_xgboost"] is True
+        assert isinstance(params["xgboost"], list)
+        assert len(params["xgboost"]) == 3
+        for p in params["xgboost"]:
+            assert "learning_rate" in p
+            assert "n_estimators" in p
+            assert p["is_xgboost"] is True
 
     def test_build_params_feed_forward_nn(self, job_scheduler):
         """Test feed forward neural network parameters."""
         params = job_scheduler.build_params()
-        nn_params = params["feed_forward_nn"]
-        assert nn_params["layers"] == 10
-        assert nn_params["output_dim"] == 2
-        assert nn_params["hidden_dim"] == 64
-        assert nn_params["input_dim"] == 32
+        assert isinstance(params["feed_forward_nn"], list)
+        assert len(params["feed_forward_nn"]) == 3
+        for p in params["feed_forward_nn"]:
+            assert "layers" in p
+            assert p["output_dim"] == 2
+            assert p["hidden_dim"] == 64
+            assert p["input_dim"] == 32
 
     def test_get_model_instance_name_linear(self, job_scheduler):
         """Test getting model instance name for linear regression."""
@@ -109,18 +123,18 @@ class TestJobScheduler:
         job_scheduler.build_images(sample_job_data, model_type)
 
         # Assert
-        assert (
-            job_scheduler.docker_container_tag
-            == "automl_platform/random_forest_model_image"
+        assert len(job_scheduler.docker_container_tags) == 3
+        assert job_scheduler.docker_container_tags[0].startswith(
+            "automl_platform/random_forest_model_image_"
         )
-        mock_subprocess.assert_called_once()
+        assert mock_subprocess.call_count == 3
 
-        # Verify command structure
-        call_args = mock_subprocess.call_args[0][0]
+        # Verify command structure for the first call
+        call_args = mock_subprocess.call_args_list[0][0][0]
         assert call_args[0] == "docker"
         assert call_args[1] == "build"
         assert "-t" in call_args
-        assert "automl_platform/random_forest_model_image" in call_args
+        assert "automl_platform/random_forest_model_image_0" in call_args
 
     @patch("subprocess.run")
     def test_build_images_with_dataset_path(
@@ -135,7 +149,11 @@ class TestJobScheduler:
 
         # Assert
         call_args = mock_subprocess.call_args[0][0]
-        assert f"DATASET_PATH={sample_job_data['dataset_path']}" in call_args
+        # Check for DATA_PATH (the actual build arg name used)
+        assert any(
+            arg.startswith("DATA_PATH=") and arg.endswith("iris.csv")
+            for arg in call_args
+        )
 
     @patch("subprocess.run")
     def test_build_images_with_target_name(
@@ -182,7 +200,7 @@ class TestJobScheduler:
     def test_fill_job_map_success(self, job_scheduler):
         """Test successful job map filling."""
         # Arrange
-        job_scheduler.docker_container_tag = "automl_platform/test_image"
+        job_scheduler.docker_container_tags = ["automl_platform/test_image_0"]
 
         # Act
         job_scheduler.fill_job_map()
@@ -190,12 +208,12 @@ class TestJobScheduler:
         # Assert
         assert len(job_scheduler.job_map) == 1
         job_id = list(job_scheduler.job_map.keys())[0]
-        assert job_scheduler.job_map[job_id] == "automl_platform/test_image"
+        assert job_scheduler.job_map[job_id] == "automl_platform/test_image_0"
 
     def test_fill_job_map_without_docker_tag(self, job_scheduler):
-        """Test fill_job_map when docker_container_tag is not set."""
+        """Test fill_job_map when docker_container_tags is empty."""
         # Arrange
-        job_scheduler.docker_container_tag = None
+        job_scheduler.docker_container_tags = []
 
         # Act
         job_scheduler.fill_job_map()
@@ -206,13 +224,13 @@ class TestJobScheduler:
     def test_fill_job_map_multiple_times(self, job_scheduler):
         """Test filling job map multiple times creates unique job IDs."""
         # Arrange
-        job_scheduler.docker_container_tag = "automl_platform/model1"
+        job_scheduler.docker_container_tags = ["automl_platform/model1"]
 
         # Act
         job_scheduler.fill_job_map()
         first_job_id = list(job_scheduler.job_map.keys())[0]
 
-        job_scheduler.docker_container_tag = "automl_platform/model2"
+        job_scheduler.docker_container_tags = ["automl_platform/model2"]
         job_scheduler.fill_job_map()
 
         # Assert
@@ -257,12 +275,17 @@ class TestJobSchedulerIntegration:
         job_scheduler.fill_job_map()
 
         # Assert
-        assert len(job_scheduler.job_map) == 1
-        assert (
-            job_scheduler.docker_container_tag == "automl_platform/xgboost_model_image"
+        # xgboost now builds 3 images
+        assert len(job_scheduler.job_map) == 3
+        assert len(job_scheduler.docker_container_tags) == 3
+        assert job_scheduler.docker_container_tags[0].startswith(
+            "automl_platform/xgboost_model_image_"
         )
+
         job_id = list(job_scheduler.job_map.keys())[0]
-        assert job_scheduler.job_map[job_id] == "automl_platform/xgboost_model_image"
+        assert job_scheduler.job_map[job_id].startswith(
+            "automl_platform/xgboost_model_image_"
+        )
 
     @patch("subprocess.run")
     def test_full_workflow_multiple_models(
@@ -279,7 +302,11 @@ class TestJobSchedulerIntegration:
             job_scheduler.fill_job_map()
 
         # Assert
-        assert len(job_scheduler.job_map) == 3
+        # linear_regression: 3
+        # random_forest: 3
+        # xgboost: 3
+        # Total: 9
+        assert len(job_scheduler.job_map) == 9
 
         # Verify all unique job IDs
         job_ids = list(job_scheduler.job_map.keys())

@@ -1,5 +1,6 @@
 __init__
 api
+dashboard
 data
 deployment
 dockers

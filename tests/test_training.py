@@ -97,9 +97,24 @@ def test_train_model_regression(_mock_env, mock_mlflow):
     assert "test_mae" in metric_names
 
 
-def test_train_model_classification_flag(_mock_env, mock_mlflow, monkeypatch):
+def test_train_model_classification_flag(_mock_env, mock_mlflow, monkeypatch, tmp_path):
     """Test if classification logic triggers when flag is set."""
+    # Create classification dataset with categorical labels
+    df = pd.DataFrame(
+        {
+            "feature1": np.random.rand(100),
+            "feature2": np.random.rand(100),
+            "target": np.random.choice(["A", "B", "C"], 100),  # 3 categorical labels
+        }
+    )
+    file_path = tmp_path / "classification_data.csv"
+    df.to_csv(file_path, index=False)
+    
+    monkeypatch.setenv("DATA_PATH", str(file_path))
     monkeypatch.setenv("IS_CLASSIFICATION", "1")
+    # Update model params for classification: 3 output classes
+    params = json.dumps({"in_features": 2, "out_features": 3})
+    monkeypatch.setenv("PARAMS", params)
 
     df = load_dataset()
     data = split_dataset(df)

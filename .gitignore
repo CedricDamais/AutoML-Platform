@@ -25,6 +25,7 @@ htmlcov/
 
 # MLflow / artifacts
 mlruns/
+mlartifacts/*
 *.h5
 *.pt
 *.ckpt
@@ -49,3 +50,13 @@ training/*
 # Ignore kubernetes jobs folder content initially
 kubernetes/jobs/*
 !kubernetes/jobs/.gitkeep
+
+data_storage/
+
+# Ignore react and node modules
+node_modules/
+build/
+dist/
+npm-debug.log*
+yarn-debug.log*
+.next
