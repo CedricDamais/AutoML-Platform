@@ -44,11 +44,12 @@ def sample_dataset_request_regression():
 class TestDatasetEndpoint:
     """Test suite for /d_dataset endpoint."""
 
+    @patch("src.api.routes.core.mlflow")
     @patch("src.api.routes.core.redis_client")
     @patch("builtins.open", new_callable=mock_open)
     @patch("pathlib.Path.mkdir")
     def test_send_dataset_success(
-        self, mock_mkdir, mock_file, mock_redis, client, sample_dataset_request
+        self, mock_mkdir, mock_file, mock_redis, mock_mlflow, client, sample_dataset_request
     ):
         """Test successful dataset submission and Redis queue publishing."""
         # Arrange
@@ -83,8 +84,9 @@ class TestDatasetEndpoint:
         assert job_data["task_type"] == "classification"
         assert "dataset_path" in job_data
 
+    @patch("src.api.routes.core.mlflow")
     @patch("src.api.routes.core.redis_client")
-    def test_send_dataset_missing_csv(self, mock_redis, client):
+    def test_send_dataset_missing_csv(self, mock_redis, mock_mlflow, client):
         """Test endpoint with missing dataset CSV."""
         # Arrange
         invalid_request = {
@@ -101,8 +103,9 @@ class TestDatasetEndpoint:
         assert response.status_code == 400
         assert "Bad Request" in response.json()["detail"]
 
+    @patch("src.api.routes.core.mlflow")
     @patch("src.api.routes.core.redis_client", None)
-    def test_send_dataset_redis_unavailable(self, client, sample_dataset_request):
+    def test_send_dataset_redis_unavailable(self, mock_mlflow, client, sample_dataset_request):
         """Test endpoint when Redis is unavailable."""
         # Act
         response = client.post("/api/v1/d_dataset", json=sample_dataset_request)
@@ -111,11 +114,12 @@ class TestDatasetEndpoint:
         assert response.status_code == 503
         assert "Redis queue is unavailable" in response.json()["detail"]
 
+    @patch("src.api.routes.core.mlflow")
     @patch("src.api.routes.core.redis_client")
     @patch("builtins.open", new_callable=mock_open)
     @patch("pathlib.Path.mkdir")
     def test_send_dataset_redis_publish_fails(
-        self, mock_mkdir, mock_file, mock_redis, client, sample_dataset_request
+        self, mock_mkdir, mock_file, mock_redis, mock_mlflow, client, sample_dataset_request
     ):
         """Test handling of Redis publish failure."""
         # Arrange
@@ -128,6 +132,7 @@ class TestDatasetEndpoint:
         assert response.status_code == 500
         assert "Failed to queue job" in response.json()["detail"]
 
+    @patch("src.api.routes.core.mlflow")
     @patch("src.api.routes.core.redis_client")
     @patch("builtins.open", new_callable=mock_open)
     @patch("pathlib.Path.mkdir")
@@ -136,6 +141,7 @@ class TestDatasetEndpoint:
         mock_mkdir,
         mock_file,
         mock_redis,
+        mock_mlflow,
         client,
         sample_dataset_request_regression,
     ):
@@ -156,11 +162,12 @@ class TestDatasetEndpoint:
         job_data = json.loads(call_args[0][1])
         assert job_data["task_type"] == "regression"
 
+    @patch("src.api.routes.core.mlflow")
     @patch("src.api.routes.core.redis_client")
     @patch("builtins.open", new_callable=mock_open)
     @patch("pathlib.Path.mkdir")
     def test_send_dataset_creates_storage_directory(
-        self, mock_mkdir, mock_file, mock_redis, client, sample_dataset_request
+        self, mock_mkdir, mock_file, mock_redis, mock_mlflow, client, sample_dataset_request
     ):
         """Test that data_storage directory is created."""
         # Arrange

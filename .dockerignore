@@ -1,0 +1,10 @@
+.git
+.venv
+venv
+mlruns
+__pycache__
+*.pyc
+.DS_Store
+.idea
+.vscode
+tmp

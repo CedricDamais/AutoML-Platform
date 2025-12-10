@@ -28,7 +28,7 @@ def main():
         logger.error("Failed to connect to Redis: %s", e)
         return
 
-    job_scheduler = JobScheduler()
+
 
     models_to_build = [
         "linear_regression",
@@ -47,6 +47,7 @@ def main():
                 request_id = job_data.get("request_id")
 
                 if request_id:
+                    job_scheduler = JobScheduler()
                     redis_client.hset(
                         f"request:{request_id}",
                         mapping={
