@@ -5,12 +5,18 @@ from uuid import uuid4
 from datetime import datetime
 
 import redis
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 import mlflow
 
 from utils.logging import logger
+from utils.logging import logger
+from src.deployment.deploy_model import deploy, start_port_forwarding
+
 
 from ..dto.datasetRequest import DatasetRequest
+from ..dto.deploymentRequest import DeploymentRequest
+from pydantic import BaseModel
+
 
 router = APIRouter()
 
@@ -161,3 +167,88 @@ async def send_dataset(req: DatasetRequest):
         "request_id": request_id,
         "status_url": f"/api/v1/jobs/{request_id}",
     }
+
+def run_deployment_task(experiment_id: str = None):
+    try:
+        def status_callback(msg: str, step: str = None):
+            if redis_client:
+                 redis_client.set("deployment_message", msg)
+                 if step:
+                     redis_client.set("deployment_step", step)
+                 logger.info(f"Deployment status update: {msg} (Step: {step})")
+
+        if redis_client:
+            redis_client.set("deployment_status", "DEPLOYING")
+            redis_client.set("deployment_message", "Starting deployment...")
+            redis_client.set("deployment_step", "INIT")
+        
+        logger.info(f"Starting background deployment task for experiment {experiment_id}...")
+        minikube_mode = os.getenv("DEPLOY_ON_MINIKUBE", "true").lower() == "true"
+        logger.info(f"Starting background deployment task for experiment {experiment_id}...")
+        minikube_mode = os.getenv("DEPLOY_ON_MINIKUBE", "true").lower() == "true"
+        deployed_run_id = deploy(minikube=minikube_mode, experiment_id=experiment_id, status_callback=status_callback)
+        
+        if redis_client:
+             redis_client.set("deployment_message", "Deployment finished. Starting port forwarding...")
+             
+        logger.info("Deployment finished. Starting port forwarding...")
+
+        
+        # Start port forwarding for the service
+        # We assume the service name is 'inference-service' and namespace 'ml-deployment' 
+        # as what was defined in deploy_model.py ( keep it mf :) )
+        start_port_forwarding(
+            namespace="ml-deployment",
+            service_name="inference-service",
+            local_port=8001,
+            remote_port=8000
+        )
+        
+        if redis_client:
+            redis_client.set("deployment_status", "SUCCESS")
+        if redis_client:
+            redis_client.set("deployment_status", "SUCCESS")
+            redis_client.set("deployment_message", "Deployment completed successfully.")
+            redis_client.set("deployment_step", "DONE")
+            if deployed_run_id:
+                redis_client.set("deployed_run_id", deployed_run_id)
+        
+        logger.info("Background deployment task completed successfully.")
+
+    except Exception as e:
+        logger.error(f"Background deployment task failed: {e}")
+        if redis_client:
+            redis_client.set("deployment_status", "FAILED")
+            redis_client.set("deployment_message", f"Deployment failed: {str(e)}")
+
+@router.get("/deploy/status")
+async def get_deployment_status():
+    """
+    Get the current status of the deployment.
+    """
+    if not redis_client:
+        return {"status": "UNKNOWN", "error": "Redis unavailable"}
+        
+    status = redis_client.get("deployment_status")
+    message = redis_client.get("deployment_message")
+    deployed_run_id = redis_client.get("deployed_run_id")
+    step = redis_client.get("deployment_step")
+    return {
+        "status": status or "IDLE", 
+        "message": message or "", 
+        "deployed_run_id": deployed_run_id,
+        "step": step or "IDLE"
+    }
+
+
+@router.post("/deploy")
+async def trigger_deployment(background_tasks: BackgroundTasks, request: DeploymentRequest = None):
+    """
+    Trigger the deployment of the best model to K3s.
+    Optional: pass experiment_id to limit scope.
+    """
+    exp_id = request.experiment_id if request else None
+    background_tasks.add_task(run_deployment_task, experiment_id=exp_id)
+
+    return {"message": "Deployment process started in background."}
+

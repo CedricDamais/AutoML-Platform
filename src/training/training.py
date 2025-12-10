@@ -169,18 +169,22 @@ def train_model(data: Data):
             y_test=pd.Series(y_test),
         )
 
+    label_mapping = None
+    if is_classification and label_encoder is not None:
+         label_mapping = {int(i): str(label) for i, label in enumerate(label_encoder.classes_)}
+
     if raw_model == "RandomForestClassifier":
         model = ensemble.RandomForestClassifier(**params)
-        train_generic_model(model=model, data=data, params=params)
+        train_generic_model(model=model, data=data, params=params, label_mapping=label_mapping)
     elif raw_model == "RandomForestRegressor":
         model = ensemble.RandomForestRegressor(**params)
-        train_generic_model(model=model, data=data, params=params)
+        train_generic_model(model=model, data=data, params=params, label_mapping=label_mapping)
     elif raw_model == "Xgboost":
         model = xgb.XGBClassifier(**params)
-        train_generic_model(model=model, data=data, params=params)
+        train_generic_model(model=model, data=data, params=params, label_mapping=label_mapping)
     elif raw_model == "XgboostRegressor":
         model = xgb.XGBRegressor(**params)
-        train_generic_model(model=model, data=data, params=params)
+        train_generic_model(model=model, data=data, params=params, label_mapping=label_mapping)
     elif raw_model == "Linear":
         params["in_features"] = data.X_train.shape[1]
         if is_classification:
@@ -190,7 +194,7 @@ def train_model(data: Data):
 
         model = nn.Linear(**params)
         train_torch_model(
-            model=model, data=data, params=params, is_classification=is_classification
+            model=model, data=data, params=params, is_classification=is_classification, label_mapping=label_mapping
         )
     elif raw_model == "Sequential":
         # Dynamically determine input_dim from the data
@@ -222,14 +226,14 @@ def train_model(data: Data):
             # Remove Softmax for CrossEntropyLoss
         )
         train_torch_model(
-            model=model, data=data, params=params, is_classification=is_classification
+            model=model, data=data, params=params, is_classification=is_classification, label_mapping=label_mapping
         )
     else:
         raise ValueError(f"Unhandled model type: {raw_model}.")
 
 
 def train_generic_model(
-    model: Union[BaseEstimator, xgb.XGBClassifier], data: Data, params: dict
+    model: Union[BaseEstimator, xgb.XGBClassifier], data: Data, params: dict, label_mapping: dict = None
 ):
     """Train sklearn models (RandomForest, XGBoost, etc.)"""
     is_classification = bool(int(os.environ.get("IS_CLASSIFICATION", "0")))
@@ -252,6 +256,12 @@ def train_generic_model(
         mlflow.set_tag("framework", "sklearn")
         for name, value in params.items():
             mlflow.log_param(name, value)
+        # Save label mapping if provided
+        if label_mapping:
+             with open("labels.json", "w") as f:
+                 json.dump(label_mapping, f)
+             mlflow.log_artifact("labels.json", "model")
+             os.remove("labels.json")
 
         model.fit(data.X_train, data.y_train)
 
@@ -272,7 +282,7 @@ def train_generic_model(
 
 
 def train_torch_model(
-    model: torch.nn.Module, data: Data, params: dict, is_classification: bool = False
+    model: torch.nn.Module, data: Data, params: dict, is_classification: bool = False, label_mapping: dict = None
 ):
     num_epochs = int(os.environ.get("NUM_EPOCHS", "100"))
     learning_rate = float(os.environ.get("LEARNING_RATE", "0.001"))
@@ -320,6 +330,14 @@ def train_torch_model(
         mlflow.log_param("batch_size", batch_size)
         for name, value in params.items():
             mlflow.log_param(name, value)
+            
+        # Save label mapping if provided
+        if label_mapping:
+             with open("labels.json", "w") as f:
+                 json.dump(label_mapping, f)
+             mlflow.log_artifact("labels.json", "model")
+             os.remove("labels.json")
+
 
         for epoch in range(num_epochs):
             model.train()

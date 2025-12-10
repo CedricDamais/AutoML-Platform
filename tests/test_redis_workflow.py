@@ -122,8 +122,8 @@ class TestWorkerJobProcessing:
                 job_scheduler.fill_job_map()
 
         # Assert
-        # linear_regression now builds 3 images
-        assert len(job_scheduler.job_map) == 3
+        # linear_regression now builds 2 images
+        assert len(job_scheduler.job_map) == 2
         assert fake_redis_server.llen("job_queue") == 0
 
     @patch("subprocess.run")
@@ -151,13 +151,13 @@ class TestWorkerJobProcessing:
                 job_scheduler.fill_job_map()
 
         # Assert
-        # linear_regression: 3
-        # random_forest: 3
-        # xgboost: 3
-        # feed_forward_nn: 3
-        # Total: 12
-        assert len(job_scheduler.job_map) == 12
-        assert mock_subprocess.call_count == 12
+        # linear_regression: 2
+        # random_forest: 2
+        # xgboost: 2
+        # feed_forward_nn: 2
+        # Total: 8
+        assert len(job_scheduler.job_map) == 8
+        assert mock_subprocess.call_count == 8
 
     @patch("subprocess.run")
     def test_worker_handles_malformed_json(self, mock_subprocess, fake_redis_server):
@@ -230,8 +230,8 @@ class TestWorkerJobProcessing:
             job_scheduler.fill_job_map()
 
         # Assert second job was processed successfully
-        # linear_regression now builds 3 images
-        assert len(job_scheduler.job_map) == 3
+        # linear_regression now builds 2 images
+        assert len(job_scheduler.job_map) == 2
 
 
 class TestEndToEndWorkflow:
@@ -280,10 +280,10 @@ class TestEndToEndWorkflow:
 
         # Assert
         assert len(processed_jobs) == 2
-        # linear_regression: 3
-        # random_forest: 3
-        # Total: 6
-        assert len(job_scheduler.job_map) == 6
+        # linear_regression: 2
+        # random_forest: 2
+        # Total: 4
+        assert len(job_scheduler.job_map) == 4
         assert fake_redis_server.llen("job_queue") == 0
 
     def test_concurrent_job_enqueueing(self, fake_redis_server):

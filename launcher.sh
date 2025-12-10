@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-# Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 RED='\033[0;31m'
@@ -16,13 +15,11 @@ echo -e "${BLUE}=========================================${NC}"
 echo -e "${BLUE}   AutoML Platform Launcher   ${NC}"
 echo -e "${BLUE}=========================================${NC}"
 
-# Check for uv
 if ! command -v uv &> /dev/null; then
     echo -e "${RED}Error: uv is not installed. Please install it first.${NC}"
     exit 1
 fi
 
-# Check for npm (Next.js dashboard)
 if ! command -v npm &> /dev/null; then
     echo -e "${RED}Error: npm is not installed. Please install Node.js/npm to run the dashboard.${NC}"
     exit 1
@@ -70,7 +67,6 @@ force_kill_port() {
     fi
 }
 
-# Function to cleanup background processes on exit
 cleanup() {
     echo -e "\n${BLUE}Cleanup...${NC}"
     kill_pids
@@ -123,7 +119,8 @@ save_pid "$API_PID"
 sleep 2
 
 echo -e "${GREEN}[3/4] Starting Job Worker...${NC}"
-if [ -z "$IP_ADDR"]; then
+
+if [ -z "$IP_ADDR" ]; then
     IP_ADDR=$(
         if [[ $(uname) == "Darwin" ]]; then
             ipconfig getifaddr en0

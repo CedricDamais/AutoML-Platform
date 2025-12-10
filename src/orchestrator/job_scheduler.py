@@ -25,6 +25,7 @@ class JobScheduler:
             dict: Parameters for the models
         """
         logger.info("Building model parameters")
+        num_configs = 2
         n_estimators_range = list(range(50, 201, 10))
         max_depth_range = list(range(5, 21, 1))
         learning_rate_range = [0.01, 0.05, 0.1, 0.2, 0.3]
@@ -35,7 +36,7 @@ class JobScheduler:
                 "n_estimators": random.choice(n_estimators_range),
                 "max_depth": random.choice(max_depth_range),
             }
-            for _ in range(3)
+            for _ in range(num_configs)
         ]
 
         xgb_params = [
@@ -44,7 +45,7 @@ class JobScheduler:
                 "n_estimators": random.choice(n_estimators_range),
                 "is_xgboost": True,
             }
-            for _ in range(3)
+            for _ in range(num_configs)
         ]
 
         nn_params = [
@@ -54,12 +55,12 @@ class JobScheduler:
                 "hidden_dim": 64,
                 "input_dim": 32,
             }
-            for _ in range(3)
+            for _ in range(num_configs)
         ]
 
         params = {
             "linear_regression": [
-                {"in_features": 32, "out_features": 2} for _ in range(3)
+                {"in_features": 32, "out_features": 2} for _ in range(num_configs)
             ],
             "random_forest": rf_params,
             "xgboost": xgb_params,
@@ -199,9 +200,9 @@ class JobScheduler:
                 "run",
                 "--rm",
                 "-v",
-                f"{mlruns_path}:/app/mlruns",
+                f"{mlruns_path}:{mlruns_path}",
                 "-e",
-                "MLFLOW_TRACKING_URI=file:./mlruns",
+                f"MLFLOW_TRACKING_URI=file://{mlruns_path}",
             ]
 
             run_cmd.append(image_tag)
